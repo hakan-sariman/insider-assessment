@@ -1,0 +1,142 @@
+package postgres
+
+import (
+	"context"
+	"errors"
+	"time"
+
+	"github.com/hakan-sariman/insider-assessment/internal/model"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
+)
+
+type Postgres struct {
+	pool   *pgxpool.Pool
+	logger *zap.Logger
+}
+
+func New(ctx context.Context, url string, maxOpen int, logger *zap.Logger) (*Postgres, error) {
+	cfg, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		logger.Error("pgx parse config error", zap.Error(err))
+		return nil, err
+	}
+	cfg.MaxConns = int32(maxOpen)
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		logger.Error("pgx pool error", zap.Error(err))
+		return nil, err
+	}
+	return &Postgres{pool: pool, logger: logger}, nil
+}
+
+func (p *Postgres) Close() { p.pool.Close() }
+
+func (p *Postgres) InsertMessage(ctx context.Context, m *model.Message) error {
+	p.logger.Info("InsertMessage", zap.String("to", m.To), zap.String("content", m.Content))
+	_, err := p.pool.Exec(ctx, `
+		INSERT INTO messages (id, "to", content, status, attempt_count, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7)
+	`, m.ID, m.To, m.Content, m.Status, m.AttemptCount, m.CreatedAt, m.UpdatedAt)
+	if err != nil {
+		p.logger.Error("InsertMessage fail", zap.Error(err))
+	}
+	return err
+}
+
+func (p *Postgres) ListSent(ctx context.Context, limit, offset int) ([]model.Message, error) {
+	p.logger.Info("ListSent", zap.Int("limit", limit), zap.Int("offset", offset))
+	rows, err := p.pool.Query(ctx, `
+		SELECT id, "to", content, status, provider_message_id, attempt_count, created_at, updated_at, sent_at, last_error
+		FROM messages
+		WHERE status='sent'
+		ORDER BY sent_at DESC NULLS LAST
+		LIMIT $1 OFFSET $2
+	`, limit, offset)
+	if err != nil {
+		p.logger.Error("ListSent query fail", zap.Error(err))
+		return nil, err
+	}
+	defer rows.Close()
+	var out []model.Message
+	for rows.Next() {
+		var m model.Message
+		if err := rows.Scan(&m.ID, &m.To, &m.Content, &m.Status, &m.ProviderMessageID, &m.AttemptCount, &m.CreatedAt, &m.UpdatedAt, &m.SentAt, &m.LastError); err != nil {
+			p.logger.Error("ListSent scan fail", zap.Error(err))
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	p.logger.Info("ListSent - fetched", zap.Int("results", len(out)))
+	return out, rows.Err()
+}
+
+func (p *Postgres) FetchUnsentForUpdate(ctx context.Context, n int) ([]model.Message, error) {
+	p.logger.Debug("FetchUnsentForUpdate", zap.Int("batch", n))
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		p.logger.Error("FetchUnsentForUpdate: begin fail", zap.Error(err))
+		return nil, err
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+	rows, err := tx.Query(ctx, `
+		SELECT id, "to", content, status, provider_message_id, attempt_count, created_at, updated_at, sent_at, last_error
+		FROM messages
+		WHERE status='unsent'
+		ORDER BY created_at ASC
+		FOR UPDATE SKIP LOCKED
+		LIMIT $1
+	`, n)
+	if err != nil {
+		p.logger.Error("FetchUnsentForUpdate: query fail", zap.Error(err))
+		return nil, err
+	}
+	defer rows.Close()
+	var out []model.Message
+	for rows.Next() {
+		var m model.Message
+		if err := rows.Scan(&m.ID, &m.To, &m.Content, &m.Status, &m.ProviderMessageID, &m.AttemptCount, &m.CreatedAt, &m.UpdatedAt, &m.SentAt, &m.LastError); err != nil {
+			p.logger.Error("FetchUnsentForUpdate: scan fail", zap.Error(err))
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	p.logger.Debug("FetchUnsentForUpdate - fetched", zap.Int("count", len(out)))
+	if err := tx.Commit(ctx); err != nil {
+		p.logger.Error("FetchUnsentForUpdate: commit fail", zap.Error(err))
+		return nil, err
+	}
+	return out, nil
+}
+
+func (p *Postgres) MarkSent(ctx context.Context, id string, providerID *string, sentAt time.Time) error {
+	p.logger.Info("MarkSent", zap.String("id", id), zap.Stringp("provider_id", providerID), zap.Time("sentAt", sentAt))
+	ct, err := p.pool.Exec(ctx, `
+		UPDATE messages SET status='sent', sent_at=$2, provider_message_id=$3, updated_at=now()
+		WHERE id=$1 AND status='unsent'
+	`, id, sentAt, providerID)
+	if err != nil {
+		p.logger.Error("MarkSent update fail", zap.Error(err))
+		return err
+	}
+	p.logger.Info("MarkSent RowsAffected", zap.Int64("rows_affected", ct.RowsAffected()))
+	if ct.RowsAffected() == 0 {
+		p.logger.Warn("MarkSent: no rows updated, possibly already sent", zap.String("id", id))
+		return errors.New("no rows updated (possibly already sent)")
+	}
+	return nil
+}
+
+func (p *Postgres) IncrementAttempt(ctx context.Context, id string, lastErr *string) error {
+	p.logger.Info("IncrementAttempt", zap.String("id", id), zap.Stringp("lastErr", lastErr))
+	_, err := p.pool.Exec(ctx, `
+		UPDATE messages SET attempt_count = attempt_count + 1, last_error=$2, updated_at=now()
+		WHERE id=$1
+	`, id, lastErr)
+	if err != nil {
+		p.logger.Error("IncrementAttempt update fail", zap.Error(err))
+	}
+	return err
+}
