@@ -64,27 +64,21 @@ func NewHTTP(cfg Config, log *zap.Logger) Sender {
 // Send sends a message to the outbound provider
 // and returns the provider message id
 func (s *httpSender) Send(ctx context.Context, req SendRequest) (string, error) {
-	// req body
-	b, err := json.Marshal(req)
-	if err != nil {
-		return "", fmt.Errorf("marshal request: %w", err)
-	}
 
+	var lastErr error
 	var sleepOnRetry = func(attempt int) {
 		if s.cfg.MaxRetries > 1 {
 			time.Sleep(time.Duration(attempt) * DefaultRetryDelay)
 		}
 	}
-	var lastErr error
+
 	for attempt := 1; attempt <= s.cfg.MaxRetries; attempt++ {
-		rCtx, rCtxCancel := context.WithTimeout(ctx, s.cfg.Timeout)
-		defer rCtxCancel()
 
-		req, _ := http.NewRequestWithContext(rCtx, http.MethodPost, s.cfg.URL, bytes.NewReader(b))
-
-		req.Header.Set("Content-Type", "application/json")
-		if s.cfg.AuthHeader != "" && s.cfg.AuthValue != "" {
-			req.Header.Set(s.cfg.AuthHeader, s.cfg.AuthValue)
+		req, err := s.buildReq(ctx, req)
+		if err != nil {
+			lastErr = err
+			sleepOnRetry(attempt)
+			continue
 		}
 
 		resp, err := s.client.Do(req)
@@ -94,23 +88,9 @@ func (s *httpSender) Send(ctx context.Context, req SendRequest) (string, error) 
 			continue
 		}
 
-		if resp.StatusCode != s.cfg.ExpectStatus {
-			lastErr = fmt.Errorf("unexpected status %d", resp.StatusCode)
-			sleepOnRetry(attempt)
-			continue
-		}
-
-		var out sendResponse
-		decErr := json.NewDecoder(resp.Body).Decode(&out)
-		if decErr != nil {
-			lastErr = fmt.Errorf("decode response: %w", decErr)
-			sleepOnRetry(attempt)
-			continue
-		}
-		msgId := out.MessageID
-
-		if msgId == "" {
-			lastErr = errors.New("empty provider messageId in response")
+		msgId, err := s.parseMessageId(resp)
+		if err != nil {
+			lastErr = err
 			sleepOnRetry(attempt)
 			continue
 		}
@@ -126,4 +106,45 @@ func (s *httpSender) Send(ctx context.Context, req SendRequest) (string, error) 
 		lastErr = errors.New("send failed")
 	}
 	return "", lastErr
+}
+
+func (s *httpSender) buildReq(ctx context.Context, sendReq SendRequest) (*http.Request, error) {
+	b, err := json.Marshal(sendReq)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	rCtx, rCtxCancel := context.WithTimeout(ctx, s.cfg.Timeout)
+	defer rCtxCancel()
+
+	req, err := http.NewRequestWithContext(rCtx, http.MethodPost, s.cfg.URL, bytes.NewReader(b))
+	if err != nil {
+		return nil, fmt.Errorf("new request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	if s.cfg.AuthHeader != "" && s.cfg.AuthValue != "" {
+		req.Header.Set(s.cfg.AuthHeader, s.cfg.AuthValue)
+	}
+
+	return req, nil
+}
+
+func (s *httpSender) parseMessageId(resp *http.Response) (string, error) {
+	if resp.StatusCode != s.cfg.ExpectStatus {
+		return "", fmt.Errorf("unexpected status %d", resp.StatusCode)
+	}
+
+	var out sendResponse
+	decErr := json.NewDecoder(resp.Body).Decode(&out)
+	if decErr != nil {
+		return "", fmt.Errorf("decode response: %w", decErr)
+	}
+
+	msgId := out.MessageID
+	if msgId == "" {
+		return "", errors.New("empty messageId in response")
+	}
+
+	return msgId, nil
 }
