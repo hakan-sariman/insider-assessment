@@ -120,7 +120,10 @@ func (s *Scheduler) tick(ctx context.Context) {
 		providerID, err := s.sender.Send(ctx, outbound.SendRequest{To: m.To, Content: m.Content})
 		if err != nil {
 			s.log.Warn("tick: send error, will increment attempt", zap.String("id", m.ID.String()), zap.Error(err))
-			_ = s.store.IncrementAttempt(ctx, m.ID.String(), strPtr(err.Error()))
+			err = s.store.IncrementAttempt(ctx, m.ID.String(), strPtr(err.Error()))
+			if err != nil {
+				s.log.Error("tick: increment attempt failed", zap.String("id", m.ID.String()), zap.Error(err))
+			}
 			continue
 		}
 		if err := s.store.MarkSent(ctx, m.ID.String(), now); err != nil {

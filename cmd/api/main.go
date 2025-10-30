@@ -50,6 +50,8 @@ func main() {
 		panic(fmt.Errorf("new logger: %w", err))
 	}
 
+	logger.Info("application starting...", zap.String("env", cfg.App.Env))
+
 	// run DB migrations before db pool is used
 	if err := runMigrations(cfg.Postgres.URL, logger); err != nil {
 		logger.Fatal("failed to run migrations", zap.Error(err))
@@ -107,7 +109,15 @@ func main() {
 	<-ctx.Done()
 	shutdownCtx, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel2()
-	_ = srv.Shutdown(shutdownCtx)
+	err = srv.Shutdown(shutdownCtx)
+	if err != nil {
+		logger.Info("http server shutdown", zap.Error(err))
+	} else {
+		logger.Info("http server shutdown successfully")
+	}
 	time.Sleep(100 * time.Millisecond)
-	logger.Sync()
+	err = logger.Sync()
+	if err != nil {
+		logger.Error("logger sync", zap.Error(err))
+	}
 }
