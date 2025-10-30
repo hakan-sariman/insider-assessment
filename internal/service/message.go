@@ -63,7 +63,7 @@ func (s *MessageService) ListSentMessages(ctx context.Context, limit, offset int
 func (s *MessageService) StartScheduler(ctx context.Context) {
 	if s.sched != nil {
 		s.logger.Debug("Starting scheduler")
-		go s.sched.Start(ctx)
+		s.sched.Start(ctx)
 	}
 }
 

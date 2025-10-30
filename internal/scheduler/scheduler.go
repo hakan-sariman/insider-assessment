@@ -70,15 +70,17 @@ func (s *Scheduler) Start(ctx context.Context) {
 	defer ticker.Stop()
 
 	s.log.Info("scheduler started", zap.Duration("interval", s.cfg.Interval), zap.Int("batch", s.cfg.BatchSize))
-	for {
-		select {
-		case <-sCtx.Done():
-			s.log.Info("scheduler context done", zap.Error(context.Cause(sCtx)))
-			return
-		case <-ticker.C:
-			s.tick(ctx)
+	go func() {
+		for {
+			select {
+			case <-sCtx.Done():
+				s.log.Info("scheduler context done", zap.Error(context.Cause(sCtx)))
+				return
+			case <-ticker.C:
+				s.tick(ctx)
+			}
 		}
-	}
+	}()
 }
 
 // Stop stops the scheduler
@@ -107,6 +109,12 @@ func (s *Scheduler) tick(ctx context.Context) {
 	s.log.Info("tick: processing messages", zap.Int("count", len(msgs)))
 	now := time.Now().UTC()
 	for _, m := range msgs {
+
+		if ctx.Err() != nil {
+			s.log.Info("tick: context done", zap.Error(ctx.Err()))
+			return
+		}
+
 		s.log.Info("tick: sending message", zap.String("id", m.ID.String()), zap.String("to", m.To))
 		providerID, err := s.send.Send(ctx, outbound.SendRequest{To: m.To, Content: m.Content})
 		if err != nil {
