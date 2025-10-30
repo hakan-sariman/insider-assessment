@@ -95,6 +95,7 @@ func (s *Server) listMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.log.Debug("listMessages: success", zap.Int("count", len(msgs)))
+	w.WriteHeader(http.StatusOK)
 	err = json.NewEncoder(w).Encode(msgs)
 	if err != nil {
 		s.log.Error("listMessages: encode error", zap.Error(err))
