@@ -6,8 +6,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/hakan-sariman/insider-assessment/internal/service"
+
+	"github.com/gorilla/mux"
 	"go.uber.org/zap"
 )
 

@@ -8,6 +8,7 @@ import (
 	"github.com/hakan-sariman/insider-assessment/internal/cache"
 	"github.com/hakan-sariman/insider-assessment/internal/model"
 	"github.com/hakan-sariman/insider-assessment/internal/outbound"
+
 	"go.uber.org/zap"
 )
 

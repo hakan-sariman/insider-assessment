@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/hakan-sariman/insider-assessment/internal/model"
 	"github.com/hakan-sariman/insider-assessment/internal/outbound"
+
+	"github.com/google/uuid"
 )
 
 type fakeStore struct {

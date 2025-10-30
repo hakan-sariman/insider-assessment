@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/hakan-sariman/insider-assessment/internal/model"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 )
