@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 
 	"github.com/hakan-sariman/insider-assessment/internal/model"
 	"github.com/hakan-sariman/insider-assessment/internal/outbound"
@@ -12,15 +11,23 @@ import (
 	"go.uber.org/zap"
 )
 
-type MessageService struct {
+// Message is the message service interface
+type Message interface {
+	CreateMessage(ctx context.Context, to, content string) (*model.Message, error)
+	ListSentMessages(ctx context.Context, limit, offset int) ([]model.Message, error)
+}
+
+// message is the message service implementation
+type message struct {
 	store  storage.Storage
 	logger *zap.Logger
 	sched  *scheduler.Scheduler
 	sender outbound.Sender
 }
 
-func NewMessageService(store storage.Storage, logger *zap.Logger, sched *scheduler.Scheduler, sender outbound.Sender) *MessageService {
-	return &MessageService{
+// NewMessageService creates a new message service
+func NewMessageService(store storage.Storage, logger *zap.Logger, sched *scheduler.Scheduler, sender outbound.Sender) Message {
+	return &message{
 		store:  store,
 		logger: logger,
 		sched:  sched,
@@ -28,16 +35,9 @@ func NewMessageService(store storage.Storage, logger *zap.Logger, sched *schedul
 	}
 }
 
-func (s *MessageService) Start(ctx context.Context) {
-	s.StartScheduler(ctx)
-}
-
-func (s *MessageService) Stop() {
-	s.StopScheduler(errors.New("service stopped"))
-}
-
-func (s *MessageService) CreateMessage(ctx context.Context, to, content string) (*model.Message, error) {
-	s.logger.Info("CreateMessage", zap.String("to", to), zap.String("content", content))
+// CreateMessage creates a new message
+func (s *message) CreateMessage(ctx context.Context, to, content string) (*model.Message, error) {
+	s.logger.Debug("CreateMessage", zap.String("to", to), zap.String("content", content))
 	msg, err := model.NewMessage(to, content)
 	if err != nil {
 		s.logger.Error("CreateMessage: validation error", zap.Error(err))
@@ -51,26 +51,13 @@ func (s *MessageService) CreateMessage(ctx context.Context, to, content string) 
 	return msg, nil
 }
 
-func (s *MessageService) ListSentMessages(ctx context.Context, limit, offset int) ([]model.Message, error) {
-	s.logger.Info("ListSentMessages", zap.Int("limit", limit), zap.Int("offset", offset))
+// ListSentMessages lists sent messages
+func (s *message) ListSentMessages(ctx context.Context, limit, offset int) ([]model.Message, error) {
+	s.logger.Debug("ListSentMessages", zap.Int("limit", limit), zap.Int("offset", offset))
 	msgs, err := s.store.ListSent(ctx, limit, offset)
 	if err != nil {
 		s.logger.Error("ListSentMessages: db error", zap.Error(err))
 	}
 	s.logger.Info("ListSentMessages: fetched", zap.Int("count", len(msgs)))
 	return msgs, err
-}
-
-func (s *MessageService) StartScheduler(ctx context.Context) {
-	if s.sched != nil {
-		s.logger.Debug("Starting scheduler")
-		s.sched.Start(ctx)
-	}
-}
-
-func (s *MessageService) StopScheduler(reason error) {
-	if s.sched != nil {
-		s.logger.Debug("Stopping scheduler")
-		s.sched.Stop(reason)
-	}
 }

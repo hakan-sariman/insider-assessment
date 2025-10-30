@@ -17,7 +17,7 @@ type Store interface {
 	// FetchUnsentForUpdate fetches unsent messages for update
 	FetchUnsentForUpdate(ctx context.Context, n int) ([]model.Message, error)
 	// MarkSent marks a message as sent
-	MarkSent(ctx context.Context, id string, providerID *string, sentAt time.Time) error
+	MarkSent(ctx context.Context, id string, sentAt time.Time) error
 	// IncrementAttempt increments the attempt count for a message
 	IncrementAttempt(ctx context.Context, id string, lastErr *string) error
 }
@@ -31,11 +31,11 @@ type Config struct {
 
 // Scheduler is the scheduler
 type Scheduler struct {
-	cfg   Config
-	store Store
-	cache *cache.Redis
-	send  outbound.Sender
-	log   *zap.Logger
+	cfg    Config
+	store  Store
+	cache  *cache.Redis
+	sender outbound.Sender
+	log    *zap.Logger
 
 	mtx       sync.Mutex
 	ctxCancel context.CancelCauseFunc
@@ -45,11 +45,11 @@ type Scheduler struct {
 // New creates a new scheduler
 func New(cfg Config, store Store, cache *cache.Redis, sender outbound.Sender, log *zap.Logger) *Scheduler {
 	return &Scheduler{
-		cfg:   cfg,
-		store: store,
-		cache: cache,
-		send:  sender,
-		log:   log,
+		cfg:    cfg,
+		store:  store,
+		cache:  cache,
+		sender: sender,
+		log:    log,
 	}
 }
 
@@ -78,7 +78,7 @@ func (s *Scheduler) Start(ctx context.Context) {
 				s.log.Info("scheduler context done", zap.Error(context.Cause(sCtx)))
 				return
 			case <-ticker.C:
-				s.tick(ctx)
+				s.tick(sCtx)
 			}
 		}
 	}()
@@ -117,19 +117,23 @@ func (s *Scheduler) tick(ctx context.Context) {
 		}
 
 		s.log.Info("tick: sending message", zap.String("id", m.ID.String()), zap.String("to", m.To))
-		providerID, err := s.send.Send(ctx, outbound.SendRequest{To: m.To, Content: m.Content})
+		providerID, err := s.sender.Send(ctx, outbound.SendRequest{To: m.To, Content: m.Content})
 		if err != nil {
 			s.log.Warn("tick: send error, will increment attempt", zap.String("id", m.ID.String()), zap.Error(err))
 			_ = s.store.IncrementAttempt(ctx, m.ID.String(), strPtr(err.Error()))
 			continue
 		}
-		if err := s.store.MarkSent(ctx, m.ID.String(), providerID, now); err != nil {
+		if err := s.store.MarkSent(ctx, m.ID.String(), now); err != nil {
 			s.log.Error("tick: mark sent failed", zap.String("id", m.ID.String()), zap.Error(err))
 			continue
 		}
-		s.log.Info("tick: message marked sent", zap.String("id", m.ID.String()), zap.Stringp("provider_id", providerID))
-		if s.cache != nil {
-			_ = s.cache.SetSent(ctx, m.ID.String(), now, 24*time.Hour)
+		s.log.Info("tick: message marked sent", zap.String("id", m.ID.String()), zap.String("provider_id", providerID))
+		if s.cache != nil && providerID != "" {
+			err = s.cache.SetSent(ctx, "message:"+providerID, now, 24*time.Hour)
+			if err != nil {
+				s.log.Error("tick: cache set sent failed", zap.String("id", m.ID.String()), zap.Error(err))
+			}
+
 		}
 	}
 }

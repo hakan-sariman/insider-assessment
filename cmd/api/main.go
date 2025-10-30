@@ -16,6 +16,7 @@ import (
 	"github.com/hakan-sariman/insider-assessment/internal/scheduler"
 	"github.com/hakan-sariman/insider-assessment/internal/service"
 	postgresstorage "github.com/hakan-sariman/insider-assessment/internal/storage/postgres"
+
 	"go.uber.org/zap"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -24,17 +25,18 @@ import (
 )
 
 // run migrations before db pool is used
-func runMigrations(dbUrl string, logger *zap.Logger) {
+func runMigrations(dbUrl string, logger *zap.Logger) error {
 	m, err := migrate.New(
 		"file:///app/internal/storage/migrations",
 		dbUrl,
 	)
 	if err != nil {
-		logger.Fatal("failed to initialize migrations", zap.Error(err))
+		return fmt.Errorf("failed to initialize migrations: %w", err)
 	}
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-		logger.Fatal("migration error", zap.Error(err))
+		return fmt.Errorf("migration error: %w", err)
 	}
+	return nil
 }
 
 func main() {
@@ -43,10 +45,15 @@ func main() {
 		panic(fmt.Errorf("load config: %w", err))
 	}
 
-	logger := logx.New(cfg.App.Env)
+	logger, err := logx.New(cfg.App.Env)
+	if err != nil {
+		panic(fmt.Errorf("new logger: %w", err))
+	}
 
 	// run DB migrations before db pool is used
-	runMigrations(cfg.Postgres.URL, logger)
+	if err := runMigrations(cfg.Postgres.URL, logger); err != nil {
+		logger.Fatal("failed to run migrations", zap.Error(err))
+	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
@@ -75,18 +82,21 @@ func main() {
 	sched := scheduler.New(scheduler.Config{
 		Enabled:   cfg.Scheduler.Enabled,
 		Interval:  cfg.Scheduler.Interval,
-		BatchSize: cfg.Scheduler.BatchSize, // EXACT 2 per tick
+		BatchSize: cfg.Scheduler.BatchSize,
 	}, db, redisClient, sender, logger)
 
 	msgSvc := service.NewMessageService(db, logger, sched, sender)
+	schedSvc := service.NewScheduler(sched, logger)
 
 	// HTTP server
+	logger.Info("registering swagger: %v", zap.Bool("is_prod", cfg.App.Env == "prod"))
 	srv := api.NewServer(api.ServerCfg{
 		Port:         cfg.Server.Port,
 		ReadTimeout:  cfg.Server.ReadTimeout,
 		WriteTimeout: cfg.Server.WriteTimeout,
 		IdleTimeout:  cfg.Server.IdleTimeout,
-	}, msgSvc, logger)
+		IsProd:       cfg.App.Env == "prod",
+	}, msgSvc, schedSvc, logger)
 
 	go func() {
 		if err := srv.Start(); err != nil && err != http.ErrServerClosed {

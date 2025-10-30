@@ -22,7 +22,7 @@ func (f *fakeStore) FetchUnsentForUpdate(ctx context.Context, n int) ([]model.Me
 	}
 	return f.msgs[:n], nil
 }
-func (f *fakeStore) MarkSent(ctx context.Context, id string, providerID *string, sentAt time.Time) error {
+func (f *fakeStore) MarkSent(ctx context.Context, id string, sentAt time.Time) error {
 	f.sent++
 	return nil
 }
@@ -32,9 +32,8 @@ func (f *fakeStore) IncrementAttempt(ctx context.Context, id string, lastErr *st
 
 type fakeSender struct{}
 
-func (f fakeSender) Send(ctx context.Context, req outbound.SendRequest) (*string, error) {
-	ok := "id"
-	return &ok, nil
+func (f fakeSender) Send(ctx context.Context, req outbound.SendRequest) (string, error) {
+	return "id", nil
 }
 
 func TestTick_SendsTwo(t *testing.T) {
@@ -45,7 +44,7 @@ func TestTick_SendsTwo(t *testing.T) {
 	}
 	store := &fakeStore{msgs: msgs}
 	cfg := Config{Enabled: true, Interval: time.Hour, BatchSize: 2}
-	s := &Scheduler{cfg: cfg, store: store, cache: nil, send: fakeSender{}}
+	s := &Scheduler{cfg: cfg, store: store, cache: nil, sender: fakeSender{}}
 	s.tick(context.Background())
 	if store.sent != 2 {
 		t.Fatalf("expected 2 sent, got %d", store.sent)

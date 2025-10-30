@@ -20,7 +20,7 @@ redis:
 scheduler:
   enabled: true            # auto start ok
   interval: "10s"           # tick every 2 minutes
-  batch_size: 2            # EXACTLY 2 per tick
+  batch_size: 2            # 2 per tick
 
 outbound:
   url: "https://webhook.site/b9a493c2-5a56-4485-8948-9d1bd933b640"

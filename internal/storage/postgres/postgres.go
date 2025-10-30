@@ -48,7 +48,7 @@ func (p *Postgres) InsertMessage(ctx context.Context, m *model.Message) error {
 func (p *Postgres) ListSent(ctx context.Context, limit, offset int) ([]model.Message, error) {
 	p.logger.Info("ListSent", zap.Int("limit", limit), zap.Int("offset", offset))
 	rows, err := p.pool.Query(ctx, `
-		SELECT id, "to", content, status, provider_message_id, attempt_count, created_at, updated_at, sent_at, last_error
+		SELECT id, "to", content, status, attempt_count, created_at, updated_at, sent_at, last_error
 		FROM messages
 		WHERE status='sent'
 		ORDER BY sent_at DESC NULLS LAST
@@ -62,7 +62,7 @@ func (p *Postgres) ListSent(ctx context.Context, limit, offset int) ([]model.Mes
 	var out []model.Message
 	for rows.Next() {
 		var m model.Message
-		if err := rows.Scan(&m.ID, &m.To, &m.Content, &m.Status, &m.ProviderMessageID, &m.AttemptCount, &m.CreatedAt, &m.UpdatedAt, &m.SentAt, &m.LastError); err != nil {
+		if err := rows.Scan(&m.ID, &m.To, &m.Content, &m.Status, &m.AttemptCount, &m.CreatedAt, &m.UpdatedAt, &m.SentAt, &m.LastError); err != nil {
 			p.logger.Error("ListSent scan fail", zap.Error(err))
 			return nil, err
 		}
@@ -83,7 +83,7 @@ func (p *Postgres) FetchUnsentForUpdate(ctx context.Context, n int) ([]model.Mes
 		_ = tx.Rollback(ctx)
 	}()
 	rows, err := tx.Query(ctx, `
-		SELECT id, "to", content, status, provider_message_id, attempt_count, created_at, updated_at, sent_at, last_error
+		SELECT id, "to", content, status, attempt_count, created_at, updated_at, sent_at, last_error
 		FROM messages
 		WHERE status='unsent'
 		ORDER BY created_at ASC
@@ -98,7 +98,7 @@ func (p *Postgres) FetchUnsentForUpdate(ctx context.Context, n int) ([]model.Mes
 	var out []model.Message
 	for rows.Next() {
 		var m model.Message
-		if err := rows.Scan(&m.ID, &m.To, &m.Content, &m.Status, &m.ProviderMessageID, &m.AttemptCount, &m.CreatedAt, &m.UpdatedAt, &m.SentAt, &m.LastError); err != nil {
+		if err := rows.Scan(&m.ID, &m.To, &m.Content, &m.Status, &m.AttemptCount, &m.CreatedAt, &m.UpdatedAt, &m.SentAt, &m.LastError); err != nil {
 			p.logger.Error("FetchUnsentForUpdate: scan fail", zap.Error(err))
 			return nil, err
 		}
@@ -112,12 +112,12 @@ func (p *Postgres) FetchUnsentForUpdate(ctx context.Context, n int) ([]model.Mes
 	return out, nil
 }
 
-func (p *Postgres) MarkSent(ctx context.Context, id string, providerID *string, sentAt time.Time) error {
-	p.logger.Info("MarkSent", zap.String("id", id), zap.Stringp("provider_id", providerID), zap.Time("sentAt", sentAt))
+func (p *Postgres) MarkSent(ctx context.Context, id string, sentAt time.Time) error {
+	p.logger.Info("MarkSent", zap.String("id", id), zap.Time("sentAt", sentAt))
 	ct, err := p.pool.Exec(ctx, `
-		UPDATE messages SET status='sent', sent_at=$2, provider_message_id=$3, updated_at=now()
+		UPDATE messages SET status='sent', sent_at=$2, updated_at=now()
 		WHERE id=$1 AND status='unsent'
-	`, id, sentAt, providerID)
+	`, id, sentAt)
 	if err != nil {
 		p.logger.Error("MarkSent update fail", zap.Error(err))
 		return err

@@ -1,0 +1,137 @@
+definitions:
+  api.createMessageReq:
+    properties:
+      content:
+        type: string
+      to:
+        type: string
+    type: object
+  model.Message:
+    properties:
+      attempt_count:
+        type: integer
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      last_error:
+        type: string
+      provider_message_id:
+        type: string
+      sent_at:
+        type: string
+      status:
+        $ref: '#/definitions/model.Status'
+      to:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  model.Status:
+    enum:
+    - unsent
+    - sent
+    type: string
+    x-enum-varnames:
+    - StatusUnsent
+    - StatusSent
+info:
+  contact: {}
+paths:
+  /api/v1/messages:
+    get:
+      description: Returns a paginated list of sent messages
+      parameters:
+      - default: 50
+        description: Max number of records
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset for pagination
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Message'
+            type: array
+        "500":
+          description: db error
+          schema:
+            type: string
+      summary: List sent messages
+      tags:
+      - Messages
+    post:
+      consumes:
+      - application/json
+      description: Creates a new message to be sent by the scheduler
+      parameters:
+      - description: Create message payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.createMessageReq'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Message'
+        "400":
+          description: invalid json or validation error
+          schema:
+            type: string
+      summary: Create a message
+      tags:
+      - Messages
+  /api/v1/scheduler/start:
+    post:
+      description: Starts the background scheduler that sends messages
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: scheduler started
+          schema:
+            type: string
+      summary: Start scheduler
+      tags:
+      - Scheduler
+  /api/v1/scheduler/stop:
+    post:
+      description: Stops the background scheduler
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: scheduler stopped
+          schema:
+            type: string
+      summary: Stop scheduler
+      tags:
+      - Scheduler
+  /healthz:
+    get:
+      description: Returns OK if the service is healthy
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: ok
+          schema:
+            type: string
+      summary: Health check
+      tags:
+      - Health
+swagger: "2.0"

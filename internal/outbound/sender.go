@@ -17,6 +17,11 @@ type SendRequest struct {
 	Content string `json:"content"`
 }
 
+type sendResponse struct {
+	Message   string `json:"message"`
+	MessageID string `json:"messageId"`
+}
+
 // Config is the configuration for the outbound sender
 type Config struct {
 	URL        string
@@ -33,7 +38,7 @@ type Config struct {
 // Sender is the outbound sender interface
 type Sender interface {
 	// Send sends a message to the outbound provider
-	Send(ctx context.Context, req SendRequest) (providerID *string, err error)
+	Send(ctx context.Context, req SendRequest) (providerID string, err error)
 }
 
 const (
@@ -58,11 +63,11 @@ func NewHTTP(cfg Config, log *zap.Logger) Sender {
 
 // Send sends a message to the outbound provider
 // and returns the provider message id
-func (s *httpSender) Send(ctx context.Context, req SendRequest) (*string, error) {
+func (s *httpSender) Send(ctx context.Context, req SendRequest) (string, error) {
 	// req body
 	b, err := json.Marshal(req)
 	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
+		return "", fmt.Errorf("marshal request: %w", err)
 	}
 
 	var sleepOnRetry = func(attempt int) {
@@ -88,17 +93,37 @@ func (s *httpSender) Send(ctx context.Context, req SendRequest) (*string, error)
 			sleepOnRetry(attempt)
 			continue
 		}
-		_ = resp.Body.Close()
-		if resp.StatusCode == s.cfg.ExpectStatus {
-			// provider message id unknown, placeholder
-			ok := fmt.Sprintf("accepted-%d", time.Now().UnixNano())
-			return &ok, nil
+
+		if resp.StatusCode != s.cfg.ExpectStatus {
+			lastErr = fmt.Errorf("unexpected status %d", resp.StatusCode)
+			sleepOnRetry(attempt)
+			continue
 		}
-		lastErr = fmt.Errorf("unexpected status %d", resp.StatusCode)
-		sleepOnRetry(attempt)
+
+		var out sendResponse
+		decErr := json.NewDecoder(resp.Body).Decode(&out)
+		if decErr != nil {
+			lastErr = fmt.Errorf("decode response: %w", decErr)
+			sleepOnRetry(attempt)
+			continue
+		}
+		msgId := out.MessageID
+
+		if msgId == "" {
+			lastErr = errors.New("empty provider messageId in response")
+			sleepOnRetry(attempt)
+			continue
+		}
+
+		err = resp.Body.Close()
+		if err != nil {
+			s.log.Error("send: close response body error", zap.Error(err))
+		}
+		return msgId, nil
+
 	}
 	if lastErr == nil {
 		lastErr = errors.New("send failed")
 	}
-	return nil, lastErr
+	return "", lastErr
 }
