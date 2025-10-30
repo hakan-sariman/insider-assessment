@@ -11,5 +11,4 @@ COPY --from=build /bin/api /app/api
 COPY --from=build /src/internal/storage/migrations /app/internal/storage/migrations
 COPY config /app/config
 EXPOSE 8080
-RUN ls -lh /app/internal/storage/migrations
 ENTRYPOINT ["/app/api"]

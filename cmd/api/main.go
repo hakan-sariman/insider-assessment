@@ -91,7 +91,6 @@ func main() {
 	schedSvc := service.NewScheduler(sched, logger)
 
 	// HTTP server
-	logger.Info("registering swagger: %v", zap.Bool("is_prod", cfg.App.Env == "prod"))
 	srv := api.NewServer(api.ServerCfg{
 		Port:         cfg.Server.Port,
 		ReadTimeout:  cfg.Server.ReadTimeout,

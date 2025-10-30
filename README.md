@@ -1,11 +1,9 @@
-# Messaging Skeleton (Go + Postgres + Redis)
+# Messaging Assestment
 
-- Go 1.22, Gorilla **mux**, **Viper** (YAML + env), **Zap** logging
+- Go 1.24, Gorilla **mux**, **Viper** (YAML + env), **Zap** logging
 - Postgres for persistence, Redis for 24h cache of sent messages
 - Simple scheduler: **every 2m, send exactly 2 unsent messages** (no cron pkg)
 - Start/Stop scheduler APIs; auto-start on boot
-- Dedupe: select only `status=unsent` within a `FOR UPDATE SKIP LOCKED` txn; mark `sent` exactly once
-- Swagger annotations included; enable by generating docs and building with `-tags swagger`
 
 ## Quick Start
 
@@ -41,5 +39,3 @@ go build -tags swagger ./cmd/api
 ```bash
 make test
 ```
-
-> Note: "No failed" policy — messages that fail after retries stay **unsent**.
