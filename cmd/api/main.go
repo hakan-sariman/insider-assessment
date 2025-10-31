@@ -54,7 +54,7 @@ func main() {
 
 	// run DB migrations before db pool is used
 	if err := runMigrations(cfg.Postgres.URL, logger); err != nil {
-		logger.Fatal("failed to run migrations", zap.Error(err))
+		logger.Error("failed to run migrations", zap.Error(err))
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
