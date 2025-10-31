@@ -11,9 +11,15 @@ import (
 	"go.uber.org/zap"
 )
 
+// CreateMessageRequest is the request for creating a message
+type CreateMessageRequest struct {
+	To      string `json:"to"`
+	Content string `json:"content"`
+}
+
 // Message is the message service interface
 type Message interface {
-	CreateMessage(ctx context.Context, to, content string) (*model.Message, error)
+	CreateMessage(ctx context.Context, msg CreateMessageRequest) (*model.Message, error)
 	ListSentMessages(ctx context.Context, limit, offset int) ([]model.Message, error)
 }
 
@@ -36,9 +42,10 @@ func NewMessageService(store storage.Storage, logger *zap.Logger, sched *schedul
 }
 
 // CreateMessage creates a new message
-func (s *message) CreateMessage(ctx context.Context, to, content string) (*model.Message, error) {
-	s.logger.Debug("CreateMessage", zap.String("to", to), zap.String("content", content))
-	msg, err := model.NewMessage(to, content)
+func (s *message) CreateMessage(ctx context.Context, msgReq CreateMessageRequest) (*model.Message, error) {
+
+	s.logger.Debug("CreateMessage", zap.String("to", msgReq.To), zap.String("content", msgReq.Content))
+	msg, err := model.NewMessage(msgReq.To, msgReq.Content)
 	if err != nil {
 		s.logger.Error("CreateMessage: validation error", zap.Error(err))
 		return nil, err

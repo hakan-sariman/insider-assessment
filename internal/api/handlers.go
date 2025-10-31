@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/hakan-sariman/insider-assessment/internal/service"
+
 	"go.uber.org/zap"
 )
 
@@ -51,7 +53,10 @@ func (s *Server) createMessage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
-	msg, err := s.msgSvc.CreateMessage(r.Context(), req.To, req.Content)
+	msg, err := s.msgSvc.CreateMessage(r.Context(), service.CreateMessageRequest{
+		To:      req.To,
+		Content: req.Content,
+	})
 	if err != nil {
 		s.log.Error("createMessage: failed", zap.Error(err))
 		http.Error(w, err.Error(), http.StatusBadRequest)
