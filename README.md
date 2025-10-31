@@ -128,6 +128,41 @@ make docker-build # build api image locally
 
 ---
 
+## Tests
+
+### Unit tests
+
+Run all unit tests across packages:
+
+```bash
+make test
+# or
+go test ./...
+```
+
+### Integration tests (Postgres)
+
+Storage-level integration tests are provided for Postgres under `internal/storage/postgres` and are guarded by a build tag. To run them, you need a running Postgres and the connection URL in `PG_URL`.
+
+1) Start Postgres (you can reuse Docker Compose):
+
+```bash
+docker compose up -d postgres
+```
+
+2) Run the tests with the `integration` build tag and `PG_URL` set. The tests will apply the SQL migration from `internal/storage/migrations/001_init.up.sql` to the target database:
+
+```bash
+export PG_URL='postgres://user:pass@localhost:5432/dbname?sslmode=disable'
+go test -tags=integration ./internal/storage/postgres -v
+```
+
+Notes:
+- Use a throwaway database/schema pointed to by `PG_URL`.
+- The tests do not clean up the schema; recreate or drop between runs if needed.
+
+---
+
 ## Notes
 - Database migrations run automatically at API startup.
 - The included `webhook` service simply accepts requests and returns HTTP 202.
