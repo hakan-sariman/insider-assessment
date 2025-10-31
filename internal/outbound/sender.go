@@ -74,6 +74,7 @@ func (s *httpSender) Send(ctx context.Context, req SendRequest) (string, error) 
 
 	for attempt := 1; attempt <= s.cfg.MaxRetries; attempt++ {
 
+		// build request
 		req, err := s.buildReq(ctx, req)
 		if err != nil {
 			lastErr = err
@@ -81,6 +82,7 @@ func (s *httpSender) Send(ctx context.Context, req SendRequest) (string, error) 
 			continue
 		}
 
+		// send request
 		resp, err := s.client.Do(req)
 		if err != nil {
 			lastErr = err
@@ -88,6 +90,7 @@ func (s *httpSender) Send(ctx context.Context, req SendRequest) (string, error) 
 			continue
 		}
 
+		// parse message id
 		msgId, err := s.parseMessageId(resp)
 		if err != nil {
 			lastErr = err
@@ -108,6 +111,7 @@ func (s *httpSender) Send(ctx context.Context, req SendRequest) (string, error) 
 	return "", lastErr
 }
 
+// buildReq builds the HTTP request
 func (s *httpSender) buildReq(ctx context.Context, sendReq SendRequest) (*http.Request, error) {
 	b, err := json.Marshal(sendReq)
 	if err != nil {
@@ -127,6 +131,7 @@ func (s *httpSender) buildReq(ctx context.Context, sendReq SendRequest) (*http.R
 	return req, nil
 }
 
+// parseMessageId parses the message id from the response
 func (s *httpSender) parseMessageId(resp *http.Response) (string, error) {
 	if resp.StatusCode != s.cfg.ExpectStatus {
 		return "", fmt.Errorf("unexpected status %d", resp.StatusCode)
