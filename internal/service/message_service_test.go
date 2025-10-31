@@ -26,7 +26,7 @@ func (f *fakeStorage) ListSent(ctx context.Context, limit, offset int) ([]model.
 	return f.listed, f.listErr
 }
 
-func (f *fakeStorage) FetchUnsentForUpdate(ctx context.Context, n int) ([]model.Message, error) {
+func (f *fakeStorage) FetchUnsent(ctx context.Context, n int) ([]model.Message, error) {
 	return nil, nil
 }
 func (f *fakeStorage) MarkSent(ctx context.Context, id string, sentAt time.Time) error { return nil }

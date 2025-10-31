@@ -6,23 +6,31 @@ import (
 	"time"
 
 	"github.com/hakan-sariman/insider-assessment/internal/model"
+	"github.com/hakan-sariman/insider-assessment/internal/storage"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 )
 
+// Ensure Postgres implements Storage interface
+var _ storage.Storage = (*Postgres)(nil)
+
+// Postgres is the postgres storage implementation
 type Postgres struct {
 	pool   *pgxpool.Pool
 	logger *zap.Logger
 }
 
+// New creates a new postgres storage
 func New(ctx context.Context, url string, maxOpen int, logger *zap.Logger) (*Postgres, error) {
 	cfg, err := pgxpool.ParseConfig(url)
 	if err != nil {
 		logger.Error("pgx parse config error", zap.Error(err))
 		return nil, err
 	}
+	// set max connections
 	cfg.MaxConns = int32(maxOpen)
+	// create pool
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		logger.Error("pgx pool error", zap.Error(err))
@@ -31,8 +39,10 @@ func New(ctx context.Context, url string, maxOpen int, logger *zap.Logger) (*Pos
 	return &Postgres{pool: pool, logger: logger}, nil
 }
 
+// Close closes the postgres storage
 func (p *Postgres) Close() { p.pool.Close() }
 
+// InsertMessage inserts a new message into the database
 func (p *Postgres) InsertMessage(ctx context.Context, m *model.Message) error {
 	p.logger.Info("InsertMessage", zap.String("to", m.To), zap.String("content", m.Content))
 	_, err := p.pool.Exec(ctx, `
@@ -45,6 +55,7 @@ func (p *Postgres) InsertMessage(ctx context.Context, m *model.Message) error {
 	return err
 }
 
+// ListSent lists sent messages
 func (p *Postgres) ListSent(ctx context.Context, limit, offset int) ([]model.Message, error) {
 	p.logger.Info("ListSent", zap.Int("limit", limit), zap.Int("offset", offset))
 	rows, err := p.pool.Query(ctx, `
@@ -72,11 +83,12 @@ func (p *Postgres) ListSent(ctx context.Context, limit, offset int) ([]model.Mes
 	return out, rows.Err()
 }
 
-func (p *Postgres) FetchUnsentForUpdate(ctx context.Context, n int) ([]model.Message, error) {
-	p.logger.Debug("FetchUnsentForUpdate", zap.Int("batch", n))
+// FetchUnsent fetches unsent messages for update
+func (p *Postgres) FetchUnsent(ctx context.Context, n int) ([]model.Message, error) {
+	p.logger.Debug("FetchUnsent", zap.Int("batch", n))
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		p.logger.Error("FetchUnsentForUpdate: begin fail", zap.Error(err))
+		p.logger.Error("FetchUnsent: begin fail", zap.Error(err))
 		return nil, err
 	}
 	defer func() {
@@ -91,7 +103,7 @@ func (p *Postgres) FetchUnsentForUpdate(ctx context.Context, n int) ([]model.Mes
 		LIMIT $1
 	`, n)
 	if err != nil {
-		p.logger.Error("FetchUnsentForUpdate: query fail", zap.Error(err))
+		p.logger.Error("FetchUnsent: query fail", zap.Error(err))
 		return nil, err
 	}
 	defer rows.Close()
@@ -99,19 +111,20 @@ func (p *Postgres) FetchUnsentForUpdate(ctx context.Context, n int) ([]model.Mes
 	for rows.Next() {
 		var m model.Message
 		if err := rows.Scan(&m.ID, &m.To, &m.Content, &m.Status, &m.AttemptCount, &m.CreatedAt, &m.UpdatedAt, &m.SentAt, &m.LastError); err != nil {
-			p.logger.Error("FetchUnsentForUpdate: scan fail", zap.Error(err))
+			p.logger.Error("FetchUnsent: scan fail", zap.Error(err))
 			return nil, err
 		}
 		out = append(out, m)
 	}
-	p.logger.Debug("FetchUnsentForUpdate - fetched", zap.Int("count", len(out)))
+	p.logger.Debug("FetchUnsent - fetched", zap.Int("count", len(out)))
 	if err := tx.Commit(ctx); err != nil {
-		p.logger.Error("FetchUnsentForUpdate: commit fail", zap.Error(err))
+		p.logger.Error("FetchUnsent: commit fail", zap.Error(err))
 		return nil, err
 	}
 	return out, nil
 }
 
+// MarkSent marks a message as sent
 func (p *Postgres) MarkSent(ctx context.Context, id string, sentAt time.Time) error {
 	p.logger.Info("MarkSent", zap.String("id", id), zap.Time("sentAt", sentAt))
 	ct, err := p.pool.Exec(ctx, `
@@ -130,6 +143,7 @@ func (p *Postgres) MarkSent(ctx context.Context, id string, sentAt time.Time) er
 	return nil
 }
 
+// IncrementAttempt increments the attempt count for a message
 func (p *Postgres) IncrementAttempt(ctx context.Context, id string, lastErr *string) error {
 	p.logger.Info("IncrementAttempt", zap.String("id", id), zap.Stringp("lastErr", lastErr))
 	_, err := p.pool.Exec(ctx, `

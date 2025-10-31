@@ -14,8 +14,8 @@ import (
 
 // Store is the store interface for the scheduler
 type Store interface {
-	// FetchUnsentForUpdate fetches unsent messages for update
-	FetchUnsentForUpdate(ctx context.Context, n int) ([]model.Message, error)
+	// FetchUnsent fetches unsent messages for update
+	FetchUnsent(ctx context.Context, n int) ([]model.Message, error)
 	// MarkSent marks a message as sent
 	MarkSent(ctx context.Context, id string, sentAt time.Time) error
 	// IncrementAttempt increments the attempt count for a message
@@ -100,7 +100,7 @@ func (s *Scheduler) Stop(reason error) {
 func (s *Scheduler) tick(ctx context.Context) {
 
 	// fetch unsent messages
-	msgs, err := s.store.FetchUnsentForUpdate(ctx, s.cfg.BatchSize)
+	msgs, err := s.store.FetchUnsent(ctx, s.cfg.BatchSize)
 	if err != nil {
 		s.log.Error("fetch unsent", zap.Error(err))
 		return

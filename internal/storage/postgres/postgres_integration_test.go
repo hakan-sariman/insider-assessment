@@ -45,7 +45,7 @@ func TestPostgres_CRUD(t *testing.T) {
 		t.Fatalf("insert: %v", err)
 	}
 
-	unsent, err := p.FetchUnsentForUpdate(ctx, 10)
+	unsent, err := p.FetchUnsent(ctx, 10)
 	if err != nil || len(unsent) == 0 {
 		t.Fatalf("fetch unsent: %v %d", err, len(unsent))
 	}

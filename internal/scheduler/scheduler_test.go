@@ -22,7 +22,7 @@ type fakeStore struct {
 	incAttemptErr error
 }
 
-func (f *fakeStore) FetchUnsentForUpdate(ctx context.Context, n int) ([]model.Message, error) {
+func (f *fakeStore) FetchUnsent(ctx context.Context, n int) ([]model.Message, error) {
 	if f.fetchErr != nil {
 		return nil, f.fetchErr
 	}
