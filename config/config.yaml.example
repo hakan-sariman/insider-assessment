@@ -1,0 +1,34 @@
+app:
+  name: messaging
+  env: dev
+
+server:
+  port: 8080
+  read_timeout: 5s
+  write_timeout: 5s
+  idle_timeout: 60s
+
+postgres:
+  url: "postgres://messaging:messaging@postgres:5432/messaging?sslmode=disable"
+  max_open_conns: 10
+
+redis:
+  addr: "redis:6379"
+  db: 0
+  ttl: "24h"
+
+scheduler:
+  enabled: true            # auto start ok
+  interval: "10s"           # tick every 2 minutes
+  batch_size: 2            # 2 per tick
+
+outbound:
+  url: "https://webhook.site/b9a493c2-5a56-4485-8948-9d1bd933b640"
+  timeout: "5s"
+  max_retries: 3
+  expect_status: 202
+  auth_header: "x-ins-auth-key"
+  auth_value: "PLACEHOLDER"
+
+swagger:
+  enabled: false           # to enable, generate docs and build with -tags swagger
