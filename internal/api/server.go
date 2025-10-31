@@ -31,12 +31,6 @@ type ServerCfg struct {
 	IsProd       bool
 }
 
-// Scheduler is the scheduler interface for API controls
-type Scheduler interface {
-	Start(ctx context.Context)
-	Stop()
-}
-
 // NewServer creates a new API server
 // and registers the routes
 func NewServer(cfg ServerCfg, msgSvc service.Message, schedSvc service.Scheduler, log *zap.Logger) *Server {
