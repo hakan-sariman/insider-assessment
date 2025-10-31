@@ -114,10 +114,7 @@ func (s *httpSender) buildReq(ctx context.Context, sendReq SendRequest) (*http.R
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 
-	rCtx, rCtxCancel := context.WithTimeout(ctx, s.cfg.Timeout)
-	defer rCtxCancel()
-
-	req, err := http.NewRequestWithContext(rCtx, http.MethodPost, s.cfg.URL, bytes.NewReader(b))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.cfg.URL, bytes.NewReader(b))
 	if err != nil {
 		return nil, fmt.Errorf("new request: %w", err)
 	}

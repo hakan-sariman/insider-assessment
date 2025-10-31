@@ -19,7 +19,7 @@ func NewRedis(addr string, db int) *Redis {
 func (r *Redis) Close() error { return r.c.Close() }
 
 // SetSent sets the sent timestamp for the provided key
-// Caller should pass the full key (e.g., "message:<id>" or "provider_message:<id>")
+// Caller should pass the full key (e.g., "message:<id>")
 func (r *Redis) SetSent(ctx context.Context, key string, sentAt time.Time, ttl time.Duration) error {
 	return r.c.Set(ctx, key, sentAt.UTC().Format(time.RFC3339Nano), ttl).Err()
 }

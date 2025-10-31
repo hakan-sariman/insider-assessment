@@ -75,6 +75,7 @@ func main() {
 	sender := outbound.NewHTTP(outbound.Config{
 		URL:          cfg.Outbound.URL,
 		Timeout:      cfg.Outbound.Timeout,
+		MaxRetries:   cfg.Outbound.MaxRetries,
 		ExpectStatus: cfg.Outbound.ExpectStatus,
 		AuthHeader:   cfg.Outbound.AuthHeader,
 		AuthValue:    cfg.Outbound.AuthValue,

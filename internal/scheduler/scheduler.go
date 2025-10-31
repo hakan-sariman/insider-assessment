@@ -67,12 +67,12 @@ func (s *Scheduler) Start(ctx context.Context) {
 	s.running = true
 	s.mtx.Unlock()
 
-	ticker := time.NewTicker(s.cfg.Interval)
-	defer ticker.Stop()
-
 	s.log.Info("scheduler started", zap.Duration("interval", s.cfg.Interval), zap.Int("batch", s.cfg.BatchSize))
 	go func() {
+		ticker := time.NewTicker(s.cfg.Interval)
+		defer ticker.Stop()
 		for {
+
 			select {
 			case <-sCtx.Done():
 				s.log.Info("scheduler context done", zap.Error(context.Cause(sCtx)))
@@ -117,9 +117,9 @@ func (s *Scheduler) tick(ctx context.Context) {
 		}
 
 		s.log.Info("tick: sending message", zap.String("id", m.ID.String()), zap.String("to", m.To))
-		providerID, err := s.sender.Send(ctx, outbound.SendRequest{To: m.To, Content: m.Content})
+		messageID, err := s.sender.Send(ctx, outbound.SendRequest{To: m.To, Content: m.Content})
 		if err != nil {
-			s.log.Warn("tick: send error, will increment attempt", zap.String("id", m.ID.String()), zap.Error(err))
+			s.log.Warn("tick: send error", zap.String("id", m.ID.String()), zap.Error(err))
 			err = s.store.IncrementAttempt(ctx, m.ID.String(), strPtr(err.Error()))
 			if err != nil {
 				s.log.Error("tick: increment attempt failed", zap.String("id", m.ID.String()), zap.Error(err))
@@ -130,9 +130,10 @@ func (s *Scheduler) tick(ctx context.Context) {
 			s.log.Error("tick: mark sent failed", zap.String("id", m.ID.String()), zap.Error(err))
 			continue
 		}
-		s.log.Info("tick: message marked sent", zap.String("id", m.ID.String()), zap.String("provider_id", providerID))
-		if s.cache != nil && providerID != "" {
-			err = s.cache.SetSent(ctx, "message:"+providerID, now, 24*time.Hour)
+		s.log.Info("tick: message marked sent", zap.String("id", m.ID.String()), zap.String("provider_id", messageID))
+		if s.cache != nil && messageID != "" {
+			s.log.Debug("tick: setting message id in cache", zap.String("id", m.ID.String()), zap.String("message_id", messageID))
+			err = s.cache.SetSent(ctx, "message:"+messageID, now, 24*time.Hour)
 			if err != nil {
 				s.log.Error("tick: cache set sent failed", zap.String("id", m.ID.String()), zap.Error(err))
 			}
