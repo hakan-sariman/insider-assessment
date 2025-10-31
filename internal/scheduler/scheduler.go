@@ -98,6 +98,8 @@ func (s *Scheduler) Stop(reason error) {
 
 // tick processes the unsent messages
 func (s *Scheduler) tick(ctx context.Context) {
+
+	// fetch unsent messages
 	msgs, err := s.store.FetchUnsentForUpdate(ctx, s.cfg.BatchSize)
 	if err != nil {
 		s.log.Error("fetch unsent", zap.Error(err))
@@ -107,6 +109,8 @@ func (s *Scheduler) tick(ctx context.Context) {
 		s.log.Info("tick: no messages to process")
 		return
 	}
+
+	// process messages
 	s.log.Info("tick: processing messages", zap.Int("count", len(msgs)))
 	now := time.Now().UTC()
 	for _, m := range msgs {
