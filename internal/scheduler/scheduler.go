@@ -126,11 +126,12 @@ func (s *Scheduler) tick(ctx context.Context) {
 			}
 			continue
 		}
+		s.log.Info("tick: message sent", zap.String("id", m.ID.String()), zap.String("message_id", messageID))
 		if err := s.store.MarkSent(ctx, m.ID.String(), now); err != nil {
 			s.log.Error("tick: mark sent failed", zap.String("id", m.ID.String()), zap.Error(err))
 			continue
 		}
-		s.log.Info("tick: message marked sent", zap.String("id", m.ID.String()), zap.String("provider_id", messageID))
+		s.log.Info("tick: message marked sent", zap.String("id", m.ID.String()), zap.String("message_id", messageID))
 		if s.cache != nil && messageID != "" {
 			s.log.Debug("tick: setting message id in cache", zap.String("id", m.ID.String()), zap.String("message_id", messageID))
 			err = s.cache.SetSent(ctx, "message:"+messageID, now, 24*time.Hour)

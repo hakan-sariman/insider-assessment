@@ -4,11 +4,14 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -o /bin/api ./cmd/api
+RUN CGO_ENABLED=0 go build -o /bin/webhook ./cmd/webhook
 
 FROM alpine:3.20
 WORKDIR /app
 COPY --from=build /bin/api /app/api
+COPY --from=build /bin/webhook /app/webhook
 COPY --from=build /src/internal/storage/migrations /app/internal/storage/migrations
 COPY config /app/config
 EXPOSE 8080
+EXPOSE 8090
 ENTRYPOINT ["/app/api"]

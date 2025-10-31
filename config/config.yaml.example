@@ -28,7 +28,7 @@ outbound:
   max_retries: 3
   expect_status: 202
   auth_header: "x-ins-auth-key"
-  auth_value: "PLACEHOLDER"
+  auth_value: "INS.me1x9uMcyYGlhKKQVPoc.bO3j9aZwRTOcA2Ywo"
 
 swagger:
   enabled: false           # to enable, generate docs and build with -tags swagger

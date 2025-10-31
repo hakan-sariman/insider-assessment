@@ -27,7 +27,7 @@ type Config struct {
 	URL        string
 	Timeout    time.Duration
 	MaxRetries int
-	// ExpectStatus is the expected HTTP status code from the outbound provider
+	// ExpectStatus is the expected HTTP status code from the outbound webhook
 	// Right now only one status code is supported,
 	// might need to be extended in the future
 	ExpectStatus int
@@ -37,8 +37,8 @@ type Config struct {
 
 // Sender is the outbound sender interface
 type Sender interface {
-	// Send sends a message to the outbound provider
-	Send(ctx context.Context, req SendRequest) (providerID string, err error)
+	// Send sends a message to the outbound webhook
+	Send(ctx context.Context, req SendRequest) (messageID string, err error)
 }
 
 const (

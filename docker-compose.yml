@@ -26,5 +26,12 @@ services:
       - redis
     volumes:
       - ./config:/app/config:ro
+  webhook:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8090:8090"
+    entrypoint: ["/app/webhook"]
 volumes:
   pgdata:
